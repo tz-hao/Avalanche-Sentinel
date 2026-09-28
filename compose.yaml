@@ -1,0 +1,43 @@
+services:
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      DATABASE_URL: ${DATABASE_URL:?Set pooled DATABASE_URL in your env file}
+      SENTINEL_ADMIN_PASSWORD: ${SENTINEL_ADMIN_PASSWORD:?Set SENTINEL_ADMIN_PASSWORD in your env file}
+      SENTINEL_SESSION_SECRET: ${SENTINEL_SESSION_SECRET:?Set SENTINEL_SESSION_SECRET in your env file}
+    ports:
+      - "3000:3000"
+
+  migrate:
+    build:
+      context: .
+      dockerfile: Dockerfile.worker
+    command: npm run prisma:deploy
+    profiles: ["migrate"]
+    environment:
+      DATABASE_URL: ${DATABASE_URL:?Set pooled DATABASE_URL in your env file}
+      DATABASE_URL_UNPOOLED: ${DATABASE_URL_UNPOOLED:?Set direct DATABASE_URL_UNPOOLED in your env file}
+
+  worker:
+    deploy:
+      replicas: 1
+    stop_grace_period: 35s
+    build:
+      context: .
+      dockerfile: Dockerfile.worker
+    profiles: ["worker"]
+    environment:
+      DATABASE_URL: ${DATABASE_URL:?Set pooled DATABASE_URL in your env file}
+      WORKER_ID: ${WORKER_ID:-sentinel-worker-1}
+      SENTINEL_DISABLE_EXTERNAL_NOTIFICATIONS: "1"
+      SENTINEL_DEMO_MODE: ${SENTINEL_DEMO_MODE:-false}
+      DEMO_NOTIFICATIONS_ENABLED: ${DEMO_NOTIFICATIONS_ENABLED:-false}
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+      TELEGRAM_CHAT_ID: ${TELEGRAM_CHAT_ID:-}
+      SENTINEL_WEBHOOK_URL: ${SENTINEL_WEBHOOK_URL:-}
+      SENTINEL_WEBHOOK_SECRET: ${SENTINEL_WEBHOOK_SECRET:-}
+      AI_SUMMARY_ENDPOINT: ${AI_SUMMARY_ENDPOINT:-}
+      AI_SUMMARY_API_KEY: ${AI_SUMMARY_API_KEY:-}
+      AI_SUMMARY_MODEL: ${AI_SUMMARY_MODEL:-}

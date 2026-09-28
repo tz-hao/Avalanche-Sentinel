@@ -1,0 +1,175 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DATABASE_URL_UNPOOLED")
+}
+
+enum MonitorType {
+  RPC_HEALTH
+  TREASURY
+  ADMIN
+  ICM_DELIVERY
+  CUSTOM_EVENT
+  VALIDATOR_HEALTH
+}
+
+enum MonitorStatus {
+  HEALTHY
+  DEGRADED
+  DOWN
+  UNKNOWN
+}
+
+enum Severity {
+  INFO
+  WARNING
+  CRITICAL
+}
+
+enum IncidentStatus {
+  OPEN
+  ACKNOWLEDGED
+  RECOVERED
+}
+
+enum NotificationChannel {
+  TELEGRAM
+  WEBHOOK
+}
+
+model Chain {
+  id          String    @id @default(cuid())
+  name        String
+  chainId     BigInt    @unique
+  rpcUrl      String
+  explorerUrl String?
+  enabled     Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  monitors    Monitor[]
+
+  @@map("chains")
+}
+
+model Monitor {
+  id          String        @id @default(cuid())
+  type        MonitorType
+  chainId     String
+  target      String?
+  configJson  Json
+  intervalSec Int           @default(30)
+  enabled     Boolean       @default(true)
+  status      MonitorStatus @default(UNKNOWN)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  chain       Chain         @relation(fields: [chainId], references: [id], onDelete: Cascade)
+  state       MonitorState?
+  incidents   Incident[]
+  icmMessages IcmMessage[]
+
+  @@index([chainId, enabled])
+  @@map("monitors")
+}
+
+model MonitorState {
+  monitorId       String   @id
+  cursorBlock     BigInt?
+  destinationCursorBlock BigInt?
+  lastCheckAt     DateTime?
+  lastStatus      MonitorStatus @default(UNKNOWN)
+  latencyMs       Int?
+  consecutiveFail Int      @default(0)
+  leaseOwner      String?
+  leaseExpiresAt  DateTime?
+  lastError       String?
+  updatedAt       DateTime @updatedAt
+  monitor         Monitor  @relation(fields: [monitorId], references: [id], onDelete: Cascade)
+
+  @@index([leaseExpiresAt])
+  @@map("monitor_state")
+}
+
+model IcmMessage {
+  id                    String   @id @default(cuid())
+  monitorId             String
+  messageId             String
+  sourceTxHash          String
+  sourceLogIndex        Int
+  sourceBlockNumber     BigInt
+  sentAt                DateTime
+  destinationTxHash     String?
+  destinationLogIndex   Int?
+  destinationBlockNumber BigInt?
+  receivedAt            DateTime?
+  executionStatus       String   @default("NOT_OBSERVED")
+  incidentId            String?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+  monitor               Monitor  @relation(fields: [monitorId], references: [id], onDelete: Cascade)
+
+  @@unique([monitorId, messageId])
+  @@unique([monitorId, sourceTxHash, sourceLogIndex])
+  @@index([monitorId, receivedAt])
+  @@map("icm_messages")
+}
+
+model Incident {
+  id          String         @id @default(cuid())
+  monitorId   String
+  severity    Severity
+  status      IncidentStatus @default(OPEN)
+  title       String
+  summary     String?
+  evidenceJson Json
+  openedAt    DateTime       @default(now())
+  acknowledgedAt DateTime?
+  recoveredAt DateTime?
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+  monitor     Monitor        @relation(fields: [monitorId], references: [id], onDelete: Cascade)
+  events      IncidentEvent[]
+  notifications Notification[]
+
+  @@index([status, severity, openedAt])
+  @@index([monitorId, status])
+  @@map("incidents")
+}
+
+model IncidentEvent {
+  id           String   @id @default(cuid())
+  incidentId   String
+  type         String
+  dedupeKey    String
+  message      String
+  evidenceJson Json
+  sourceTxHash String?
+  logIndex     Int?
+  createdAt    DateTime @default(now())
+  incident     Incident @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+
+  @@unique([incidentId, type, dedupeKey])
+  @@index([incidentId, createdAt])
+  @@map("incident_events")
+}
+
+model Notification {
+  id         String              @id @default(cuid())
+  incidentId String
+  channel    NotificationChannel
+  eventType  String
+  status     String
+  attempts   Int                 @default(0)
+  sentAt     DateTime?
+  error      String?
+  createdAt  DateTime            @default(now())
+  updatedAt  DateTime            @updatedAt
+  incident   Incident            @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+
+  @@unique([incidentId, channel, eventType])
+  @@index([status, createdAt])
+  @@map("notifications")
+}
