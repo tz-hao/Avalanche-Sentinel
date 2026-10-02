@@ -3,6 +3,7 @@
 import {displaySafe} from "./display-safety";
 import React, { useState } from "react";
 import type { IncidentEventRecord } from "@/contracts/domain";
+import { formatTimelineMessage, EVENT_TYPE_CHINESE } from "./incident-formatters";
 
 interface TimelineViewerProps {
   events?: IncidentEventRecord[];
@@ -40,12 +41,14 @@ function getEventTypeMeta(type: string) {
         icon: "⇄",
         color: "text-cyan-300 border-cyan-700 bg-cyan-950/60",
       };
-    default:
+    default: {
+      const zh = EVENT_TYPE_CHINESE[type];
       return {
-        label: type,
+        label: zh ? `${zh} (${type})` : type,
         icon: "•",
         color: "text-slate-300 border-slate-700 bg-slate-800",
       };
+    }
   }
 }
 
@@ -102,7 +105,7 @@ export function TimelineViewer({ events = [] }: TimelineViewerProps) {
                   </div>
                 </div>
 
-                <p className="text-sm text-slate-200 mt-1">{event.message}</p>
+                <p className="text-sm text-slate-200 mt-1">{formatTimelineMessage(event.message)}</p>
 
                 {/* Optional Expandable Snapshot */}
                 {event.evidence && (
@@ -119,7 +122,7 @@ export function TimelineViewer({ events = [] }: TimelineViewerProps) {
                       <div className="mt-2 p-3 bg-slate-950 rounded border border-slate-800 font-mono text-xs text-slate-300">
                         {event.evidence.txHash && (
                           <div className="mb-1 text-slate-400">
-                            TxHash:{" "}
+                            交易哈希 (TxHash):{" "}
                             <span className="text-slate-200 break-all">
                               {event.evidence.txHash}
                             </span>

@@ -3,6 +3,7 @@ import Link from "next/link";
 import type { Route } from "next";
 import type { IncidentRecord, MonitorRecord } from "@/contracts/domain";
 import { StatusBadge } from "./StatusBadge";
+import { formatIncidentTitle } from "./incident-formatters";
 
 export function SentinelMark() {
   return <svg viewBox="0 0 40 44" width="36" height="40" aria-hidden="true"><path fill="currentColor" d="M20 1 37 9v14c0 10-9 17-17 20C12 40 3 33 3 23V9Z"/><path fill="none" stroke="var(--sentinel-bg)" strokeWidth="3" d="m12 26 8-15 8 15M16 22h8"/></svg>;
@@ -38,7 +39,17 @@ export function MonitorIdentity({ monitor }: {monitor:MonitorRecord}) {
   const env = monitorEnvironment(monitor);
   return <span className={`environment env-${env.toLowerCase()}`}>{env}</span>;
 }
+const MONITOR_TYPE_SHORT: Record<string, string> = {
+  RPC_HEALTH: "RPC 节点健康",
+  TREASURY: "金库大额异动",
+  ADMIN: "特权与合约升级",
+  ICM_DELIVERY: "ICM 跨链交付",
+  CUSTOM_EVENT: "自定义事件阈值",
+  VALIDATOR_HEALTH: "验证节点健康",
+};
+
 export function IncidentCard({ incident }: {incident:IncidentRecord}) {
-  return <Link href={`/incidents/${incident.id}` as Route} className="incident-card"><div className="incident-card-top"><StatusBadge type="severity" value={incident.severity} size="sm"/><StatusBadge type="incident" value={incident.status} size="sm"/></div><h3>{incident.title}</h3><p className="muted">{incident.monitor?.type ?? incident.evidence.provenance.toUpperCase()} · {chainLabel(incident.evidence.chainId,incident.evidence.chainName)}</p><div className="incident-card-bottom"><time dateTime={incident.openedAt}>{dateLabel(incident.openedAt)}</time><span>证据详情 →</span></div></Link>;
+  const typeText = incident.monitor?.type ? `${MONITOR_TYPE_SHORT[incident.monitor.type] ?? incident.monitor.type} (${incident.monitor.type})` : `来源: ${incident.evidence.provenance.toUpperCase()}`;
+  return <Link href={`/incidents/${incident.id}` as Route} className="incident-card"><div className="incident-card-top"><StatusBadge type="severity" value={incident.severity} size="sm"/><StatusBadge type="incident" value={incident.status} size="sm"/></div><h3>{formatIncidentTitle(incident.title)}</h3><p className="muted">{typeText} · {chainLabel(incident.evidence.chainId,incident.evidence.chainName)}</p><div className="incident-card-bottom"><time dateTime={incident.openedAt}>{dateLabel(incident.openedAt)}</time><span>证据详情 →</span></div></Link>;
 }
 

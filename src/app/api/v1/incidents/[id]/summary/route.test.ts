@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({ requireAdmin: vi.fn(), getIncident: vi.fn(), generate: vi.fn() }));
 vi.mock("@/server/route-auth", () => ({ requireAdmin: mocks.requireAdmin }));
@@ -11,9 +11,11 @@ const context = { params: Promise.resolve({ id: "incident-test" }) };
 
 beforeEach(() => {
   vi.clearAllMocks();
+  vi.spyOn(console, "warn").mockImplementation(() => {});
   mocks.requireAdmin.mockResolvedValue({ response: null });
   mocks.getIncident.mockResolvedValue({ id: "incident-test", evidence: { facts: {} } });
 });
+afterEach(() => { vi.restoreAllMocks(); });
 
 describe("POST incident summary", () => {
   it("requires an administrator before reading the Incident or invoking AI", async () => {
@@ -44,5 +46,23 @@ describe("POST incident summary", () => {
     const response = await POST(new Request("http://localhost/api/v1/incidents/incident-test/summary", { method: "POST" }), context);
     expect(response.status).toBe(503);
     expect((await response.json()).error.code).toBe("AI_SUMMARY_UNAVAILABLE");
+  });
+
+  it("returns an actionable timeout without exposing the provider error", async () => {
+    mocks.generate.mockRejectedValue(new DOMException("sensitive provider error", "TimeoutError"));
+    const response = await POST(new Request("http://localhost/api/v1/incidents/incident-test/summary", { method: "POST" }), context);
+    expect(response.status).toBe(503);
+    const body = await response.json();
+    expect(body.error).toMatchObject({ code: "AI_SUMMARY_TIMEOUT", message: "AI 摘要生成超时，请稍后重试。" });
+    expect(JSON.stringify(body)).not.toContain("sensitive");
+    expect(console.warn).toHaveBeenCalledWith("Sentinel AI summary failed", { category: "AI_SUMMARY_TIMEOUT" });
+  });
+
+  it("logs only an allowlisted category, never an arbitrary provider message", async () => {
+    mocks.generate.mockRejectedValue(new Error("AI_SUMMARY_sensitive-credential-value"));
+    const response = await POST(new Request("http://localhost/api/v1/incidents/incident-test/summary", { method: "POST" }), context);
+    expect(response.status).toBe(503);
+    expect(console.warn).toHaveBeenCalledWith("Sentinel AI summary failed", { category: "AI_SUMMARY_INTERNAL_ERROR" });
+    expect(JSON.stringify(vi.mocked(console.warn).mock.calls)).not.toContain("sensitive-credential-value");
   });
 });

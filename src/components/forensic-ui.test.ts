@@ -29,6 +29,8 @@ describe("Sentinel Forensic UI evidence boundaries",()=>{
   render(React.createElement(EvidenceViewer,{evidence:{chainId:"43113",chainName:"Fuji",rule:"ICM delivery observation",observedAt:"2026-09-27T00:00:00Z",provenance:"icm",facts:{deliveryStatus:"DELIVERED",executionStatus:"FAILED"}}}));
   expect(screen.getByText("DELIVERED")).toBeDefined();
   expect(screen.getByText("FAILED")).toBeDefined();
+  expect(screen.getByText("ICM 跨链交付状态观测")).toBeDefined();
+  expect(screen.getByText("ICM delivery observation")).toBeDefined();
   expect(screen.getByText(/当前 API 未提供服务端存证哈希/)).toBeDefined();
   expect(screen.queryByText(/Relayer failed/)).toBeNull();
  });

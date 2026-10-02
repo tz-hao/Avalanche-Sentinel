@@ -105,8 +105,8 @@ export function StatusBadge({ type, value, size = "md", className = "" }: Status
         break;
       case "ACKNOWLEDGED":
         symbol = "◐";
-        text = "处置中 / ACKNOWLEDGED";
-        ariaText = "事件状态：处置中";
+        text = "已确认 / ACKNOWLEDGED";
+        ariaText = "事件状态：已确认";
         colorClasses = "bg-sky-950/70 text-sky-200 border-sky-700";
         break;
       case "RECOVERED":

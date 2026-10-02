@@ -8,7 +8,7 @@ export default function NotFound() {
         404
       </div>
       <h1 className="text-xl font-bold text-slate-100 mb-2">
-        页面未找到 (Page Not Found)
+        页面未找到 (404)
       </h1>
       <p className="text-xs text-slate-400 max-w-md mb-6 font-mono">
         请求的安全运营路径不存在或资源已被归档移除。

@@ -21,7 +21,7 @@ export default function GlobalError({
         ✕
       </div>
       <h1 className="text-xl font-bold text-slate-100 mb-2">
-        系统前端运行异常 (Operational Error)
+        系统前端运行异常
       </h1>
       <p className="text-xs text-rose-300 max-w-lg mb-6 font-mono break-all p-3 rounded bg-slate-900 border border-slate-800">
         {error.message || "前端渲染过程中发生意外错误，请尝试重新加载。"}

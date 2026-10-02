@@ -192,7 +192,7 @@ export function CreateMonitorModal({
           <div>
             <h2 id="create-monitor-title" className="text-lg font-bold text-slate-100 flex items-center gap-2">
               <span className="text-cyan-400 font-mono">+</span>
-              <span>新建监控项 (Create Sentinel Monitor)</span>
+              <span>新建监控项</span>
             </h2>
             <p className="text-xs text-slate-400 mt-0.5">
               支持 RPC 健康、金库流出、特权异动、ICM 跨链及扩展验证类型
@@ -374,7 +374,7 @@ export function CreateMonitorModal({
                   </div>
                   <div>
                     <label htmlFor="treasury-asset-addr" className="block text-xs text-slate-400 mb-1">
-                      代币合约 (原生币可空)
+                      代币合约 (原生币可留空)
                     </label>
                     <input
                       id="treasury-asset-addr"
