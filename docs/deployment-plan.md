@@ -1,5 +1,7 @@
 # Production deployment plan（M8B Railway Worker 已部署）
 
+> 2026-10-07 最新发布：可靠性修复已推送 GitHub，新增心跳迁移已应用，现有 Web/单副本 Worker 已更新；当前唯一 RPC Monitor 保持启用和 HEALTHY，其他 Monitor 未启用。本轮后台 API/日志/状态读回已通过，Production 浏览器可视验收等待用户登录。下方 M8B/M9 记录属于历史阶段，不代表当前全部 Monitor 停用。详见 [本次发布与验收记录](reliability-production-release.md)。
+
 当前更新（M9，2026-09-27）：唯一 `Production Fuji RPC Health`（`cmujg0um90001dibs3bjnamtc`）经单独授权已启用，真实Neon/Fuji/Web、cursor推进及一次官方Restart验收通过。Worker保持1副本RUNNING，唯一Production Monitor HEALTHY；通知与AI关闭。Soak固定起始快照与证据见 [M9记录](production-smoke.md)。停在 `PRODUCTION_SOAK_READY`，未自动开始M9.5。以下M8B零Monitor描述保留为历史验收记录。
 
 状态：**Web 保持 VERIFIED_PRODUCTION_BASELINE；M8B Railway Worker 已获单独授权并完成部署、Neon 读取、日志和一次官方 Restart 验收。Worker 保持 RUNNING，所有 Monitor disabled；停止在 PRODUCTION_MONITOR_ENABLE_AUTH_REQUIRED，不进入 M9。** “Production”指 Sentinel 服务环境，链仍是 Avalanche Fuji C-Chain（chainId **43113**），仅 RPC 读取，不切换主网、不发送链上交易。

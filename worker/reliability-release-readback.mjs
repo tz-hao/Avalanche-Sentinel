@@ -21,7 +21,7 @@ try {
   const defaults = await db.$queryRaw`SELECT column_default FROM information_schema.columns WHERE table_schema='public' AND table_name='monitors' AND column_name='enabled'`;
   console.log(JSON.stringify({ timestamp: new Date().toISOString(),
     counts: { monitors: monitors.length, incidents: incidents.length, events: events.length, notifications: notifications.length, sent: notifications.filter(n => n.status === "SENT").length },
-    hashes: { monitorConfig: hash(monitors.map(({ status, updatedAt, ...config }) => config)), chains: hash(chains), incidents: hash(incidents), events: hash(events), notifications: hash(notifications) },
+    hashes: { monitorConfig: hash(monitors.map(({ status, updatedAt, ...config }) => { void status; void updatedAt; return config; })), chains: hash(chains), incidents: hash(incidents), events: hash(events), notifications: hash(notifications) },
     enabled: monitors.filter(m => m.enabled).map(m => ({ id: m.id, type: m.type, production: m.configJson?.production === true, acceptance: m.configJson?.acceptance === true, status: m.status })),
     state: state ? { cursor: state.cursorBlock?.toString() ?? null, lastCheckAt: state.lastCheckAt, failures: state.consecutiveFail, errorPresent: Boolean(state.lastError) } : null,
     heartbeat: heartbeat ? { startedAt: heartbeat.startedAt, lastHeartbeatAt: heartbeat.lastHeartbeatAt, lastTickCompletedAt: heartbeat.lastTickCompletedAt, fresh: Date.now() - heartbeat.lastHeartbeatAt.getTime() <= 30_000 } : null,
@@ -29,6 +29,7 @@ try {
     migrations: migrations.map(m => ({ name: m.migration_name, applied: Boolean(m.finished_at), rolledBack: Boolean(m.rolled_back_at) })),
   }));
 } catch (error) {
-  console.log(JSON.stringify({ blocked: "SAFE_RELEASE_READBACK_FAILED", code: typeof error?.code === "string" && /^P\d{4}$/.test(error.code) ? error.code : null }));
+  console.log(JSON.stringify({ blocked: "SAFE_RELEASE_READBACK_FAILED", code: typeof error?.code === "string" && /^P\d{4}$/.test(error.code) ? error.code : null,
+    errorType: ["Error", "TypeError", "RangeError", "PrismaClientKnownRequestError", "PrismaClientUnknownRequestError", "PrismaClientInitializationError"].includes(error?.name) ? error.name : "UnknownError" }));
   process.exitCode = 1;
 } finally { await db.$disconnect(); }

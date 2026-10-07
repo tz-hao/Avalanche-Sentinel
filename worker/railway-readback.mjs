@@ -45,7 +45,7 @@ try {
       lifecycle: records.filter(item => ["Worker scheduler starting", "Worker SIGTERM received", "Worker shutdown complete"].includes(item.message)).map(item => ({ timestamp: item.timestamp, event: item.message })),
       sigterm: (messages.match(/Worker SIGTERM received/g) || []).length,
       shutdownComplete: (messages.match(/Worker shutdown complete/g) || []).length,
-      workerErrors: (messages.match(/Worker (?:tick failed|shutdown failed|shutdown timeout)|Monitor failed/g) || []).length,
+      workerErrors: (messages.match(/Worker (?:tick failed|heartbeat failed|notifications failed|shutdown failed|shutdown timeout)|Monitor failed/g) || []).length,
       dockerfileWorkerMention: messages.includes("Dockerfile.worker"), prismaGenerate: messages.includes("prisma:generate"), webBuild: messages.includes("next build"),
       npmErrorCodes: [...new Set(messages.match(/npm (?:ERR!|error) code [A-Z0-9_]+/g) || [])],
       knownOpenSSLWarning: messages.includes("failed to detect the libssl") }));
