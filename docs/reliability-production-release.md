@@ -71,6 +71,17 @@ cursor 从基线 `59139406` 推进到新 Worker 下 `59139637`，再到 `5913968
 - 宿主机独立 Neon 读回曾短暂出现 P1001，及一次未取得错误类别的失败；受控重试后成功。没有把宿主机异常写成已证明的 Worker 故障，也未删除这些观察记录。
 - Vercel 连接器查询返回 not-found，既有已登录官方 CLI 对精确原项目访问成功；未绕过权限或改用其他账户/项目。
 - Vercel curl beta 将命令末尾 `--scope` 当作 curl 选项而失败；没有修改访问保护。公开 HTTPS GET 成功，最终 authenticated API 与 alias/log readback 成功。
-- 最终页面浏览器会话已过期。应用内浏览器停在原 Production login，已请用户直接登录、不提供口令。**浏览器可视验收/Console 的本轮 Production 结果仍待登录，不宣称完整 Production UI 验收通过。** 本地 375/768/1440px 及 Console=0 的既有结果不能代替这一门禁。
+- 初次最终页面检查时浏览器会话已过期，曾停在原 Production login；用户随后自行登录，未向助手提供口令。该门禁已按下节完成；没有用本地结果代替 Production 浏览器验收。
 
-本轮已完成源码发布、数据库迁移、Web/Worker 上线及后台只读验收。下一步仅在登录后完成 overview → monitors → incidents → Treasury Evidence 的只读页面/Console 检查；不重复迁移或部署。
+## 最终 Production 浏览器验收
+
+2026-10-07 UTC `13:36` → `13:37`，在用户已登录的应用内浏览器、原 Production 域名完成只读导航：overview → monitors → incidents → Treasury `cmu8b90py0005dihkc2bi1bm9` → `#evidence`。
+
+- Overview：Worker 显示心跳正常；唯一生产 RPC 显示 HEALTHY。历史高危事件明确与当前生产探针故障区分，未将历史事件清零。
+- Monitors：已启用 1、已停用 12、启用项降级/异常均为 0。唯一目标 Chain ID 43113，HEALTHY，延迟 101ms，cursor `59140432` / failures 0。Acceptance、Admin、Treasury、ICM 均保持停用；未打开管理操作或配置表单。
+- Incidents：真实 24 条记录正常显示，筛选与时间输入、事件详情入口存在；没有创建数据来验证分页，也没有提交业务写操作。
+- Treasury detail / Evidence：详情与证据锚点正常；交易哈希、区块 `58482509`、logIndex 0、USDC rawAmount `20000000` / decimals 6 / normalizedAmount 20 与阈值 10 正常显示。状态 ACKNOWLEDGED 与恢复时间空值明确区分；没有 ACK、复制敏感状态或生成 AI 摘要。
+- 实际浏览器 Console error 记录为 0（读取 error level，limit=100），证据区域截图视觉检查正常。工具没有提供浏览器 Network capture，本次 Network 结论仍仅依赖前述独立 authenticated API 与 Vercel runtime log readback，不冒充浏览器 Network 检查。
+- 终点 UTC `13:37:23.840` 独立 Neon 只读查询：cursor `59140466`，HEALTHY，failure=0，新鲜 heartbeat `13:37:17.046`。Monitor/Incident/Event/Notification/SENT 计数仍为 `13/24/45/79/2`，全部五类哈希仍与发布前基线一致；本次新增事件、通知及 SENT 增量为 0。
+
+本轮源码发布、数据库迁移、现有 Web/单副本 Worker 上线，以及 API、日志和真实 Production 页面/Console 验收完成。未重复迁移、部署或 restart；未启用新增 Monitor，未发送通知、调用 AI 或进行链上写入。验收记录作为纯文档提交推送，不再次部署业务代码；冻结 Demo Tag 不变。
