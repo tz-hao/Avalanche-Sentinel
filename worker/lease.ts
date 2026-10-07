@@ -6,7 +6,7 @@ export async function acquireMonitorLease(monitorId: string, workerId: string) {
   const now = new Date();
   const expiresAt = new Date(now.getTime() + LEASE_MS);
   const result = await prisma.monitorState.updateMany({
-    where: { monitorId, OR: [{ leaseExpiresAt: null }, { leaseExpiresAt: { lt: now } }, { leaseOwner: workerId }] },
+    where: { monitorId, monitor: { enabled: true }, OR: [{ leaseExpiresAt: null }, { leaseExpiresAt: { lt: now } }, { leaseOwner: workerId }] },
     data: { leaseOwner: workerId, leaseExpiresAt: expiresAt },
   });
   return result.count === 1;

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { parseAbiItem } from "viem";
 
 const address = z.string().regex(/^0x[a-fA-F0-9]{40}$/, "必须是 EVM 地址");
 const positiveInteger = z.number().int().positive();
@@ -76,6 +77,7 @@ export const validatorHealthConfigSchema = z.object({
 });
 
 export const createMonitorSchema = z.object({
+  enabled: z.boolean().optional(),
   type: z.enum(["RPC_HEALTH", "TREASURY", "ADMIN", "ICM_DELIVERY", "CUSTOM_EVENT", "VALIDATOR_HEALTH"]),
   chainId: z.string().min(1),
   target: address.optional(),
@@ -90,9 +92,16 @@ export const createMonitorSchema = z.object({
     CUSTOM_EVENT: customEventConfigSchema,
     VALIDATOR_HEALTH: validatorHealthConfigSchema,
   } as const;
+  if (value.config.name !== undefined && (typeof value.config.name !== "string" || value.config.name.length > 80)) ctx.addIssue({ code: z.ZodIssueCode.custom, message: "监控名称最多 80 字符", path: ["config", "name"] });
   const result = configSchemas[value.type].safeParse(value.config);
   if (!result.success) ctx.addIssue({ code: z.ZodIssueCode.custom, message: result.error.issues[0]?.message ?? "监控配置无效", path: ["config"] });
   if (value.type !== "RPC_HEALTH" && !value.target) ctx.addIssue({ code: z.ZodIssueCode.custom, message: "此监控需要 target 地址", path: ["target"] });
+  if (value.type === "CUSTOM_EVENT" && result.success) {
+    try {
+      const event = parseAbiItem(String(value.config.eventAbi));
+      if (event.type !== "event" || !event.inputs.some(input => input.name === value.config.valueField && /^u?int\d*$/.test(input.type))) throw new Error("invalid field");
+    } catch { ctx.addIssue({ code: z.ZodIssueCode.custom, message: "ABI 必须是事件，阈值字段必须是事件中的整数类型", path: ["config"] }); }
+  }
 });
 
 export type CreateMonitorInput = z.infer<typeof createMonitorSchema>;

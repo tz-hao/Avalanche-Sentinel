@@ -18,6 +18,17 @@ beforeEach(() => {
 afterEach(() => { vi.restoreAllMocks(); });
 
 describe("POST incident summary", () => {
+  it.each([
+    [402, "AI_SUMMARY_BALANCE_REQUIRED"],
+    [429, "AI_SUMMARY_RATE_LIMITED"],
+    [401, "AI_SUMMARY_AUTH_FAILED"],
+    [403, "AI_SUMMARY_AUTH_FAILED"],
+  ])("returns a safe actionable code for provider HTTP %s", async (status, code) => {
+    mocks.generate.mockRejectedValue(new Error(`AI_SUMMARY_HTTP_${status}`));
+    const response = await POST(new Request("http://localhost/api/v1/incidents/incident-test/summary", { method: "POST" }), context);
+    expect(response.status).toBe(503);
+    expect((await response.json()).error.code).toBe(code);
+  });
   it("requires an administrator before reading the Incident or invoking AI", async () => {
     mocks.requireAdmin.mockResolvedValue({ response: Response.json({ error: { code: "UNAUTHORIZED" } }, { status: 401 }) });
     const response = await POST(new Request("http://localhost/api/v1/incidents/incident-test/summary", { method: "POST" }), context);

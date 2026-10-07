@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import type { ChainRecord, MonitorType } from "@/contracts/domain";
+import type { ChainRecord, MonitorRecord, MonitorType } from "@/contracts/domain";
 import type { CreateMonitorInput } from "@/contracts/monitor-config";
 import { sentinelApi, SentinelApiError } from "@/lib/sentinel-api";
 
@@ -10,6 +10,7 @@ interface CreateMonitorModalProps {
   isOpen: boolean;
   onClose: () => void;
   onCreated: () => void;
+  editingMonitor?: MonitorRecord;
 }
 
 const MONITOR_TYPE_LABELS: Record<MonitorType, { name: string; desc: string }> = {
@@ -44,50 +45,55 @@ export function CreateMonitorModal({
   isOpen,
   onClose,
   onCreated,
+  editingMonitor,
 }: CreateMonitorModalProps) {
-  const [type, setType] = useState<MonitorType>("RPC_HEALTH");
-  const [chainId, setChainId] = useState<string>(chains[0]?.id ?? "");
-  const [target, setTarget] = useState<string>("");
-  const [intervalSec, setIntervalSec] = useState<number>(30);
+  const initial = editingMonitor?.config ?? {};
+  const asset = initial.asset as { symbol?: string; decimals?: number; address?: string } | undefined;
+  const [name, setName] = useState(String(initial.name ?? ""));
+  const [type, setType] = useState<MonitorType>(editingMonitor?.type ?? "RPC_HEALTH");
+  const [chainId, setChainId] = useState<string>(editingMonitor?.chainId ?? chains[0]?.id ?? "");
+  const [target, setTarget] = useState<string>(editingMonitor?.target ?? "");
+  const [intervalSec, setIntervalSec] = useState<number>(editingMonitor?.intervalSec ?? 30);
   const [submitting, setSubmitting] = useState<boolean>(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   // Form states per type
   // RPC_HEALTH
-  const [latencyThresholdMs, setLatencyThresholdMs] = useState<number>(2000);
-  const [consecutiveFailureThreshold, setConsecutiveFailureThreshold] = useState<number>(3);
+  const [latencyThresholdMs, setLatencyThresholdMs] = useState<number>(Number(initial.latencyThresholdMs ?? 2000));
+  const [consecutiveFailureThreshold, setConsecutiveFailureThreshold] = useState<number>(Number(initial.consecutiveFailureThreshold ?? 3));
 
   // TREASURY
-  const [treasurySymbol, setTreasurySymbol] = useState<string>("USDC");
-  const [treasuryDecimals, setTreasuryDecimals] = useState<number>(6);
-  const [treasuryAssetAddress, setTreasuryAssetAddress] = useState<string>("");
-  const [treasuryThresholdAtomic, setTreasuryThresholdAtomic] = useState<string>("1000000000");
-  const [treasuryAllowlist, setTreasuryAllowlist] = useState<string>("");
+  const [treasurySymbol, setTreasurySymbol] = useState<string>(asset?.symbol ?? "USDC");
+  const [treasuryDecimals, setTreasuryDecimals] = useState<number>(asset?.decimals ?? 6);
+  const [treasuryAssetAddress, setTreasuryAssetAddress] = useState<string>(asset?.address ?? "");
+  const [treasuryThresholdAtomic, setTreasuryThresholdAtomic] = useState<string>(String(initial.thresholdAtomic ?? "1000000000"));
+  const [treasuryAllowlist, setTreasuryAllowlist] = useState<string>(Array.isArray(initial.allowlist) ? initial.allowlist.join("\n") : "");
 
   // ADMIN
-  const [adminOwnership, setAdminOwnership] = useState<boolean>(true);
-  const [adminRole, setAdminRole] = useState<boolean>(true);
-  const [adminUpgrade, setAdminUpgrade] = useState<boolean>(true);
+  const eventKinds = Array.isArray(initial.eventKinds) ? initial.eventKinds : ["OWNERSHIP", "ROLE", "UPGRADE"];
+  const [adminOwnership, setAdminOwnership] = useState<boolean>(eventKinds.includes("OWNERSHIP"));
+  const [adminRole, setAdminRole] = useState<boolean>(eventKinds.includes("ROLE"));
+  const [adminUpgrade, setAdminUpgrade] = useState<boolean>(eventKinds.includes("UPGRADE"));
 
   // ICM_DELIVERY
-  const [icmDestChainId, setIcmDestChainId] = useState<string>("");
+  const [icmDestChainId, setIcmDestChainId] = useState<string>(String(initial.destinationChainId ?? ""));
   const [icmDestRpcUrl, setIcmDestRpcUrl] = useState<string>("");
-  const [icmDestTarget, setIcmDestTarget] = useState<string>("");
-  const [icmSourceBlockchainId, setIcmSourceBlockchainId] = useState<string>("");
-  const [icmDestBlockchainId, setIcmDestBlockchainId] = useState<string>("");
-  const [icmWarningSec, setIcmWarningSec] = useState<number>(180);
-  const [icmCriticalSec, setIcmCriticalSec] = useState<number>(600);
+  const [icmDestTarget, setIcmDestTarget] = useState<string>(String(initial.destinationTarget ?? ""));
+  const [icmSourceBlockchainId, setIcmSourceBlockchainId] = useState<string>(String(initial.sourceBlockchainId ?? ""));
+  const [icmDestBlockchainId, setIcmDestBlockchainId] = useState<string>(String(initial.destinationBlockchainId ?? ""));
+  const [icmWarningSec, setIcmWarningSec] = useState<number>(Number(initial.warningAfterSec ?? 180));
+  const [icmCriticalSec, setIcmCriticalSec] = useState<number>(Number(initial.criticalAfterSec ?? 600));
 
   // CUSTOM_EVENT
   const [customEventAbi, setCustomEventAbi] = useState<string>(
-    "event Transfer(address indexed from, address indexed to, uint256 value)"
+    String(initial.eventAbi ?? "event Transfer(address indexed from, address indexed to, uint256 value)")
   );
-  const [customValueField, setCustomValueField] = useState<string>("value");
-  const [customThresholdAtomic, setCustomThresholdAtomic] = useState<string>("1000000000000000000");
+  const [customValueField, setCustomValueField] = useState<string>(String(initial.valueField ?? "value"));
+  const [customThresholdAtomic, setCustomThresholdAtomic] = useState<string>(String(initial.thresholdAtomic ?? "1000000000000000000"));
 
   // VALIDATOR_HEALTH
-  const [valHealthUrl, setValHealthUrl] = useState<string>("http://127.0.0.1:9650/ext/health");
-  const [valUnhealthySec, setValUnhealthySec] = useState<number>(90);
+  const [valHealthUrl, setValHealthUrl] = useState<string>(editingMonitor ? "" : "http://127.0.0.1:9650/ext/health");
+  const [valUnhealthySec, setValUnhealthySec] = useState<number>(Number(initial.unhealthyAfterSec ?? 90));
 
   if (!isOpen) return null;
 
@@ -132,7 +138,7 @@ export function CreateMonitorModal({
       } else if (type === "ICM_DELIVERY") {
         config = {
           destinationChainId: icmDestChainId.trim(),
-          destinationRpcUrl: icmDestRpcUrl.trim(),
+          destinationRpcUrl: icmDestRpcUrl.trim() || initial.destinationRpcUrl,
           destinationTarget: icmDestTarget.trim(),
           sourceEventTopic: "0x2a211ad4a59ab9d003852404f9c57c690704ee755f3c79d2c2812ad32da99df8",
           destinationEventTopic: "0x292ee90bbaf70b5d4936025e09d56ba08f3e421156b6a568cf3c2840d9343e34",
@@ -149,7 +155,7 @@ export function CreateMonitorModal({
         };
       } else if (type === "VALIDATOR_HEALTH") {
         config = {
-          healthUrl: valHealthUrl.trim(),
+          healthUrl: valHealthUrl.trim() || initial.healthUrl,
           unhealthyAfterSec: Number(valUnhealthySec),
         };
       }
@@ -159,10 +165,12 @@ export function CreateMonitorModal({
         chainId: chainId || chains[0]?.id || "",
         ...(target.trim() ? { target: target.trim() } : {}),
         intervalSec: Number(intervalSec),
-        config,
+        config: { ...initial, ...config, name: name.trim() },
+        enabled: false,
       };
 
-      await sentinelApi.createMonitor(input);
+      if (editingMonitor) await sentinelApi.updateMonitor(editingMonitor.id, { target: input.target, config: input.config, intervalSec: input.intervalSec });
+      else await sentinelApi.createMonitor(input);
       onCreated();
       onClose();
     } catch (err) {
@@ -192,7 +200,7 @@ export function CreateMonitorModal({
           <div>
             <h2 id="create-monitor-title" className="text-lg font-bold text-slate-100 flex items-center gap-2">
               <span className="text-cyan-400 font-mono">+</span>
-              <span>新建监控项</span>
+              <span>{editingMonitor ? "编辑监控配置" : "新建监控项"}</span>
             </h2>
             <p className="text-xs text-slate-400 mt-0.5">
               支持 RPC 健康、金库流出、特权异动、ICM 跨链及扩展验证类型
@@ -218,6 +226,8 @@ export function CreateMonitorModal({
         )}
 
         <form onSubmit={handleSubmit} className="space-y-5">
+          <p className="muted">{editingMonitor ? "保存后保持停用，原有证据与扫描游标保留。" : "新监控默认停用，确认配置后再人工启用。"}</p>
+          <label className="block">监控名称<input className="search-input" value={name} maxLength={80} onChange={e => setName(e.target.value)} /></label>
           {/* Monitor Type Selection */}
           <div>
             <label htmlFor="monitor-type-select" className="block text-xs font-semibold text-slate-300 mb-1.5">
@@ -225,6 +235,7 @@ export function CreateMonitorModal({
             </label>
             <select
               id="monitor-type-select"
+              disabled={!!editingMonitor}
               value={type}
               onChange={(e) => setType(e.target.value as MonitorType)}
               className="w-full bg-slate-950 border border-slate-700 rounded-md px-3 py-2 text-sm text-slate-100 focus:ring-2 focus:ring-cyan-500 focus:border-transparent font-medium"
@@ -246,6 +257,7 @@ export function CreateMonitorModal({
               </label>
               <select
                 id="monitor-chain-select"
+                disabled={!!editingMonitor}
                 value={chainId || chains[0]?.id || ""}
                 onChange={(e) => setChainId(e.target.value)}
                 required
@@ -497,10 +509,11 @@ export function CreateMonitorModal({
                   </label>
                   <input
                     id="icm-dest-rpc"
-                    type="url"
+                    type={editingMonitor ? "password" : "url"}
+                    placeholder={editingMonitor ? "留空保留现有 RPC" : ""}
                     value={icmDestRpcUrl}
                     onChange={(e) => setIcmDestRpcUrl(e.target.value)}
-                    required
+                    required={!editingMonitor}
                     className="w-full bg-slate-900 border border-slate-700 rounded px-3 py-1.5 text-xs font-mono text-slate-200"
                   />
                 </div>
@@ -625,10 +638,11 @@ export function CreateMonitorModal({
                   </label>
                   <input
                     id="val-health-url"
-                    type="url"
+                    type={editingMonitor ? "password" : "url"}
+                    placeholder={editingMonitor ? "留空保留现有健康端点" : ""}
                     value={valHealthUrl}
                     onChange={(e) => setValHealthUrl(e.target.value)}
-                    required
+                    required={!editingMonitor}
                     className="w-full bg-slate-900 border border-slate-700 rounded px-3 py-1.5 text-xs font-mono text-slate-200"
                   />
                 </div>
@@ -667,10 +681,10 @@ export function CreateMonitorModal({
               {submitting ? (
                 <>
                   <span className="w-3.5 h-3.5 border-2 border-slate-900 border-t-transparent rounded-full animate-spin" />
-                  <span>正在创建...</span>
+                  <span>{editingMonitor ? "正在保存..." : "正在创建..."}</span>
                 </>
               ) : (
-                <span>立即创建监控</span>
+                <span>{editingMonitor ? "保存配置" : "立即创建监控"}</span>
               )}
             </button>
           </div>

@@ -47,6 +47,10 @@ export type MonitorRecord = {
   lastCheckAt?: string | null;
   latencyMs?: number | null;
   lastError?: string | null;
+  cursorBlock?: string | null;
+  consecutiveFail?: number;
+  stale?: boolean;
+  recordedStatus?: MonitorStatus;
   chain: Pick<ChainRecord, "id" | "name" | "chainId" | "explorerUrl">;
 };
 
@@ -74,6 +78,7 @@ export type IncidentRecord = {
 };
 
 export type OverviewRecord = {
+  worker?: { status: "RUNNING" | "STALE" | "UNKNOWN"; lastHeartbeatAt: string | null };
   overallStatus: "HEALTHY" | "DEGRADED" | "CRITICAL" | "UNKNOWN";
   openIncidents: number;
   criticalIncidents: number;

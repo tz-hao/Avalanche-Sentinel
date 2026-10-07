@@ -26,6 +26,16 @@ describe("Frontend Core Interactions & Form Submissions", () => {
   });
 
   describe("CreateMonitorModal Form Submissions", () => {
+    it("edits a stopped monitor without enabling it or losing hidden settings", async () => {
+      const update = vi.spyOn(sentinelApi, "updateMonitor").mockResolvedValue({ data: { monitor: {} } } as Awaited<ReturnType<typeof sentinelApi.updateMonitor>>);
+      const original = { id: "edit", type: "RPC_HEALTH" as const, chainId: "chain_c", enabled: false, intervalSec: 60, status: "UNKNOWN" as const, config: { name: "测试探针", rpcUrl: "https://example.test/private-endpoint", expectedChainId: "43114", latencyThresholdMs: 3000, consecutiveFailureThreshold: 4 }, chain: mockChains[0] };
+      render(React.createElement(CreateMonitorModal, { chains: mockChains, isOpen: true, editingMonitor: original, onClose: vi.fn(), onCreated: vi.fn() }));
+      expect((screen.getByLabelText("监控类型 (Type) *") as HTMLSelectElement).disabled).toBe(true);
+      fireEvent.change(screen.getByLabelText("监控名称"), { target: { value: "已编辑探针" } });
+      fireEvent.click(screen.getByRole("button", { name: "保存配置" }));
+      await waitFor(() => expect(update).toHaveBeenCalledWith("edit", expect.objectContaining({ intervalSec: 60, config: expect.objectContaining({ name: "已编辑探针", rpcUrl: original.config.rpcUrl, expectedChainId: "43114", latencyThresholdMs: 3000 }) })));
+      expect(update.mock.calls[0][1]).not.toHaveProperty("enabled");
+    });
     it("submits valid RPC_HEALTH monitor without target address", async () => {
       const createSpy = vi.spyOn(sentinelApi, "createMonitor").mockResolvedValueOnce({
         data: { monitor: { id: "mon_created" } },
@@ -56,6 +66,7 @@ describe("Frontend Core Interactions & Form Submissions", () => {
             type: "RPC_HEALTH",
             chainId: "chain_c",
             intervalSec: 30,
+            enabled: false,
             config: expect.objectContaining({
               latencyThresholdMs: 2000,
               consecutiveFailureThreshold: 3,

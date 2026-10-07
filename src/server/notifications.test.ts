@@ -63,6 +63,30 @@ afterEach(() => {
 });
 
 describe("Webhook notification", () => {
+  it("bounds Telegram requests and safely records timeout without marking success", async () => {
+    vi.stubEnv("TELEGRAM_BOT_TOKEN", "test-only-placeholder");
+    vi.stubEnv("TELEGRAM_CHAT_ID", "test-only-target");
+    try {
+      const timeout = vi.spyOn(AbortSignal, "timeout");
+      const fetchMock = vi.fn().mockRejectedValue(new DOMException("secret-like-provider-message", "TimeoutError"));
+      vi.stubGlobal("fetch", fetchMock);
+      rows.push({ ...notification("OPEN"), channel: "TELEGRAM" });
+      await deliverPendingNotifications(async () => incident);
+      expect(timeout).toHaveBeenCalledWith(10_000);
+      expect(fetchMock.mock.calls[0][1].signal).toBeInstanceOf(AbortSignal);
+      expect(rows[0]).toMatchObject({ status: "FAILED", attempts: 1, sentAt: null });
+      expect(rows[0].error).toContain("TimeoutError");
+      expect(rows[0].error).not.toContain("secret-like-provider-message");
+    } finally { vi.unstubAllEnvs(); }
+  });
+  it("does not start another notification when shutdown was requested", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    rows.push(notification("OPEN"));
+    await deliverPendingNotifications(async () => incident, { stopping: () => true });
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(rows[0].attempts).toBe(0);
+  });
   it("formats a minimal acceptance payload without raw evidence facts", () => {
     const payload = webhookPayload(notification("OPEN"), incident);
     expect(payload).toMatchObject({ schemaVersion: 1, event: "incident", notificationType: "OPEN", incident: { id: incident.id, status: "OPEN", severity: "WARNING", monitorType: "RPC_HEALTH", acceptance: true, detectedAt: incident.openedAt } });

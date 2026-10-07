@@ -55,6 +55,16 @@ model Chain {
   @@map("chains")
 }
 
+model WorkerHeartbeat {
+  workerId String @id
+  startedAt DateTime
+  lastHeartbeatAt DateTime
+  lastTickCompletedAt DateTime?
+
+  @@index([lastHeartbeatAt])
+  @@map("worker_heartbeats")
+}
+
 model Monitor {
   id          String        @id @default(cuid())
   type        MonitorType
@@ -62,7 +72,7 @@ model Monitor {
   target      String?
   configJson  Json
   intervalSec Int           @default(30)
-  enabled     Boolean       @default(true)
+  enabled     Boolean       @default(false)
   status      MonitorStatus @default(UNKNOWN)
   createdAt   DateTime      @default(now())
   updatedAt   DateTime      @updatedAt

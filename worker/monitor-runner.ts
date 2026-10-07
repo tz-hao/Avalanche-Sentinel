@@ -9,6 +9,7 @@ import { prisma } from "@/server/db";
 import { safeError } from "@/server/safe-error";
 import { exceedsAtomicThreshold, formatAtomicAmount, monitorStatusForRpc, rpcChainIdMatches, rpcSeverity, treasurySenderMatches } from "./rules";
 import { decodeReceive, decodeSend, executionStatus, pendingSeverity, RECEIVE_TOPIC, SEND_TOPIC, type IcmLog } from "./icm-events";
+import { decodeAdminEvent } from "./admin-events";
 
 type RuntimeMonitor = Monitor & { chain: Chain; state: MonitorState | null };
 const adminTopics = {
@@ -98,7 +99,7 @@ async function scanTreasury(monitor: RuntimeMonitor) {
       }
     }
   }
-  await recordMonitorStatus(monitor.id, "HEALTHY", { cursorBlock: toBlock, lastError: null });
+  await recordMonitorStatus(monitor.id, "HEALTHY", { cursorBlock: toBlock, lastError: null, consecutiveFail: 0 });
 }
 
 async function scanAdmin(monitor: RuntimeMonitor) {
@@ -116,9 +117,12 @@ async function scanAdmin(monitor: RuntimeMonitor) {
   ];
   for (const topic of topics) {
     const logs = await client.getLogs({ address: monitor.target as Hex, topics: [topic], fromBlock, toBlock } as never);
-    for (const log of logs) await openAndNotify({ monitorId: monitor.id, severity: "CRITICAL", title: "Admin 或 Upgrade 事件", message: "检测到已配置的权限或实现变更事件，请人工复核。", evidence: buildEvidence(monitor, "Ownership / Role / Upgrade event", "log", { topic: log.topics[0], data: log.data }, { txHash: log.transactionHash, blockNumber: log.blockNumber.toString(), logIndex: Number(log.logIndex) }), eventType: "ADMIN_EVENT" });
+    for (const log of logs) {
+      const decoded = decodeAdminEvent(log.data, log.topics);
+      await openAndNotify({ monitorId: monitor.id, severity: "CRITICAL", title: "Admin 或 Upgrade 事件", message: "检测到已配置的权限或实现变更事件，请人工复核。", evidence: buildEvidence(monitor, "Ownership / Role / Upgrade event", "log", { topic: log.topics[0], topics: log.topics, data: log.data, ...decoded }, { txHash: log.transactionHash, blockNumber: log.blockNumber.toString(), logIndex: Number(log.logIndex) }), eventType: "ADMIN_EVENT" });
+    }
   }
-  await recordMonitorStatus(monitor.id, "HEALTHY", { cursorBlock: toBlock, lastError: null });
+  await recordMonitorStatus(monitor.id, "HEALTHY", { cursorBlock: toBlock, lastError: null, consecutiveFail: 0 });
 }
 
 async function scanIcm(monitor: RuntimeMonitor) {
@@ -184,7 +188,7 @@ async function scanIcm(monitor: RuntimeMonitor) {
       if (!item.incidentId) await prisma.icmMessage.update({ where: { id: item.id }, data: { incidentId: incident.id } });
     }
   }
-  await recordMonitorStatus(monitor.id, "HEALTHY", { cursorBlock: sourceTo, destinationCursorBlock: destinationTo, lastError: null });
+  await recordMonitorStatus(monitor.id, "HEALTHY", { cursorBlock: sourceTo, destinationCursorBlock: destinationTo, lastError: null, consecutiveFail: 0 });
 }
 
 async function scanCustomEvent(monitor: RuntimeMonitor) {
@@ -202,7 +206,7 @@ async function scanCustomEvent(monitor: RuntimeMonitor) {
     if (typeof value !== "bigint" || !exceedsAtomicThreshold(value, config.thresholdAtomic)) continue;
     await openAndNotify({ monitorId: monitor.id, severity: "WARNING", title: "Custom Event Rule 命中", message: `事件字段 ${config.valueField} 超过配置阈值。`, evidence: buildEvidence(monitor, `${config.valueField} > ${config.thresholdAtomic}`, "log", { event: config.eventAbi, field: config.valueField, valueAtomic: value.toString() }, { txHash: log.transactionHash, blockNumber: log.blockNumber.toString(), logIndex: Number(log.logIndex) }), eventType: "CUSTOM_EVENT" });
   }
-  await recordMonitorStatus(monitor.id, "HEALTHY", { cursorBlock: latest, lastError: null });
+  await recordMonitorStatus(monitor.id, "HEALTHY", { cursorBlock: latest, lastError: null, consecutiveFail: 0 });
 }
 
 async function checkValidatorHealth(monitor: RuntimeMonitor) {
@@ -222,7 +226,7 @@ async function checkValidatorHealth(monitor: RuntimeMonitor) {
   } finally { clearTimeout(timeout); }
 }
 
-export async function runMonitor(monitor: RuntimeMonitor) {
+async function executeMonitor(monitor: RuntimeMonitor) {
   switch (monitor.type) {
     case "RPC_HEALTH": return runRpcHealth(monitor);
     case "TREASURY": return scanTreasury(monitor);
@@ -230,5 +234,13 @@ export async function runMonitor(monitor: RuntimeMonitor) {
     case "ICM_DELIVERY": return scanIcm(monitor);
     case "CUSTOM_EVENT": return scanCustomEvent(monitor);
     case "VALIDATOR_HEALTH": return checkValidatorHealth(monitor);
+  }
+}
+
+export async function runMonitor(monitor: RuntimeMonitor) {
+  try { await executeMonitor(monitor); }
+  catch (error) {
+    await recordMonitorStatus(monitor.id, "DEGRADED", { lastError: safeError(error), consecutiveFail: (monitor.state?.consecutiveFail ?? 0) + 1 });
+    throw error;
   }
 }

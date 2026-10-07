@@ -11,6 +11,30 @@ function fixture(tick = vi.fn(async () => {}), disconnect = vi.fn(async () => {}
 }
 
 describe("Worker graceful shutdown", () => {
+  it("keeps ticks and heartbeats progressing while one notification dispatch is pending", async () => {
+    vi.useFakeTimers();
+    let finish!: () => void;
+    const backgroundTask = vi.fn(() => new Promise<void>(resolve => { finish = resolve; }));
+    const tick = vi.fn(async () => {});
+    const heartbeat = vi.fn(async () => {});
+    const disconnect = vi.fn(async () => {});
+    const exit = vi.fn();
+    const scheduler = createScheduler({ tick, heartbeat, backgroundTask, disconnect, exit, log: vi.fn(), intervalMs: 10 });
+    scheduler.start();
+    await vi.advanceTimersByTimeAsync(30);
+    expect(backgroundTask).toHaveBeenCalledOnce();
+    expect(tick.mock.calls.length).toBeGreaterThan(1);
+    expect(heartbeat.mock.calls.length).toBeGreaterThan(1);
+    const count = tick.mock.calls.length;
+    const shutdown = scheduler.shutdown();
+    await vi.advanceTimersByTimeAsync(20);
+    expect(tick).toHaveBeenCalledTimes(count);
+    expect(disconnect).not.toHaveBeenCalled();
+    finish();
+    await shutdown;
+    expect(disconnect).toHaveBeenCalledOnce();
+    expect(exit).toHaveBeenCalledWith(0);
+  });
   it("stops before the first tick and disconnects cleanly", async () => {
     const f = fixture();
     await f.scheduler.shutdown();

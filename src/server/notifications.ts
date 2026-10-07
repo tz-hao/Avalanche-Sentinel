@@ -14,7 +14,7 @@ async function deliverTelegram(incident: IncidentRecord): Promise<DeliveryResult
   const token = process.env.TELEGRAM_BOT_TOKEN;
   const chatId = process.env.TELEGRAM_CHAT_ID;
   if (!token || !chatId) return { delivered: false, skipped: true, error: "Telegram 未配置" };
-  const response = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ chat_id: chatId, text: telegramText(incident), disable_web_page_preview: true }) });
+  const response = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ chat_id: chatId, text: telegramText(incident), disable_web_page_preview: true }), signal: AbortSignal.timeout(10_000) });
   return response.ok ? { delivered: true } : { delivered: false, error: `Telegram HTTP ${response.status}` };
 }
 
@@ -57,9 +57,11 @@ export async function queueNotifications(incidentId: string, eventType: string, 
   })));
 }
 
-export async function deliverPendingNotifications(resolveIncident: (incidentId: string) => Promise<IncidentRecord | null>, scope?: { incidentId?: string; channel?: NotificationChannel }) {
+export async function deliverPendingNotifications(resolveIncident: (incidentId: string) => Promise<IncidentRecord | null>, scope?: { incidentId?: string; channel?: NotificationChannel; stopping?: () => boolean }) {
+  const deadline = Date.now() + 15_000;
   const pending = await prisma.notification.findMany({ where: { status: { in: ["PENDING", "FAILED"] }, attempts: { lt: 5 }, ...(scope?.incidentId ? { incidentId: scope.incidentId } : {}), ...(scope?.channel ? { channel: scope.channel } : {}) }, orderBy: { createdAt: "asc" }, take: 50 });
   for (const notification of pending) {
+    if (scope?.stopping?.() || Date.now() >= deadline) break;
     if (notification.status === "FAILED" && Date.now() - notification.updatedAt.getTime() < Math.min(60_000, 2 ** notification.attempts * 1_000)) continue;
     const incident = await resolveIncident(notification.incidentId);
     if (!incident) continue;

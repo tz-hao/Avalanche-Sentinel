@@ -1,5 +1,6 @@
 import type { Chain, Incident, IncidentEvent, Monitor, MonitorState } from "@prisma/client";
 import type { EvidenceSnapshot, IncidentEventRecord, IncidentRecord, MonitorRecord } from "@/contracts/domain";
+import { monitorHealth } from "./monitor-health";
 
 type MonitorWithChain = Monitor & { chain: Chain; state: MonitorState | null };
 type IncidentWithMonitor = Incident & { monitor: (Monitor & { chain: Chain }) | null; events?: IncidentEvent[] };
@@ -33,7 +34,11 @@ export function serializeMonitor(monitor: MonitorWithChain): MonitorRecord {
     config: asObject(monitor.configJson),
     intervalSec: monitor.intervalSec,
     enabled: monitor.enabled,
-    status: monitor.status,
+    status: monitorHealth(monitor.status, monitor.enabled, monitor.intervalSec, monitor.state?.lastCheckAt).status,
+    recordedStatus: monitor.status,
+    stale: monitorHealth(monitor.status, monitor.enabled, monitor.intervalSec, monitor.state?.lastCheckAt).stale,
+    cursorBlock: monitor.state?.cursorBlock?.toString() ?? null,
+    consecutiveFail: monitor.state?.consecutiveFail ?? 0,
     lastCheckAt: monitor.state?.lastCheckAt?.toISOString() ?? null,
     latencyMs: monitor.state?.latencyMs ?? null,
     lastError: monitor.state?.lastError ?? null,

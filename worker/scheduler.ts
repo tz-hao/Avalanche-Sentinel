@@ -7,12 +7,16 @@ export function createScheduler(options: {
   disconnect: () => Promise<void>;
   exit: (code: number) => void;
   log: (message: string) => void;
+  heartbeat?: () => Promise<void>;
+  backgroundTask?: (stopping: () => boolean) => Promise<void>;
   intervalMs?: number;
   shutdownTimeoutMs?: number;
 }) {
   let stopping = false;
   let started = false;
   let active: Promise<void> | undefined;
+  let heartbeatActive: Promise<void> | undefined;
+  let backgroundActive: Promise<void> | undefined;
   let interval: ReturnType<typeof setInterval> | undefined;
   let shutdownPromise: Promise<void> | undefined;
 
@@ -27,8 +31,14 @@ export function createScheduler(options: {
   function start() {
     if (started || stopping) return;
     started = true;
-    interval = setInterval(() => { void tick(); }, options.intervalMs ?? 5_000);
-    void tick();
+    const cycle = () => {
+      if (stopping) return;
+      if (options.heartbeat && !heartbeatActive) heartbeatActive = Promise.resolve().then(() => stopping ? undefined : options.heartbeat!()).catch(error => options.log(`Worker heartbeat failed: ${safeError(error)}`)).finally(() => { heartbeatActive = undefined; });
+      if (options.backgroundTask && !backgroundActive) backgroundActive = Promise.resolve().then(() => stopping ? undefined : options.backgroundTask!(() => stopping)).catch(error => options.log(`Worker notifications failed: ${safeError(error)}`)).finally(() => { backgroundActive = undefined; });
+      void tick();
+    };
+    interval = setInterval(cycle, options.intervalMs ?? 5_000);
+    cycle();
   }
 
   function shutdown() {
@@ -42,7 +52,7 @@ export function createScheduler(options: {
         options.exit(1);
       }, options.shutdownTimeoutMs ?? SHUTDOWN_TIMEOUT_MS);
       try {
-        await active;
+        await Promise.all([active, heartbeatActive, backgroundActive]);
         await options.disconnect();
         options.log("Worker shutdown complete");
         options.exit(0);

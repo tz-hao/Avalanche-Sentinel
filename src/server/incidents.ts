@@ -2,6 +2,7 @@ import type { IncidentStatus, Prisma, Severity } from "@prisma/client";
 import type { EvidenceSnapshot } from "@/contracts/domain";
 import { prisma } from "@/server/db";
 import { serializeIncident } from "@/server/serializers";
+import { incidentQuerySchema, type IncidentQuery } from "@/contracts/incident-query";
 
 const incidentInclude = { monitor: { include: { chain: true } }, events: { orderBy: { createdAt: "asc" } } } as const;
 
@@ -106,14 +107,36 @@ export async function recoverIncidentForSourceTx(monitorId: string, sourceTxHash
   return serializeIncident(incident);
 }
 
-export async function listIncidents(filters: { severity?: Severity; status?: IncidentStatus; limit?: number }) {
+export async function listIncidentPage(input: Partial<IncidentQuery>) {
+  const filters = incidentQuerySchema.parse(input);
+  let anchor: { openedAt: Date; id: string } | undefined;
+  if (filters.cursor) {
+    try {
+      const parsed = JSON.parse(Buffer.from(filters.cursor, "base64url").toString("utf8"));
+      if (typeof parsed.id !== "string" || !parsed.id || typeof parsed.at !== "string" || !Number.isFinite(Date.parse(parsed.at))) throw new Error();
+      anchor = { id: parsed.id, openedAt: new Date(parsed.at) };
+    } catch { throw new Error("INVALID_INCIDENT_CURSOR"); }
+  }
+  const clauses: Prisma.IncidentWhereInput[] = [];
+  if (filters.q) clauses.push({ OR: [...["id", "title", "monitorId"].map<Prisma.IncidentWhereInput>(field => ({ [field]: { contains: filters.q, mode: "insensitive" } })),
+    { evidenceJson: { path: ["txHash"], string_contains: filters.q } },
+    { evidenceJson: { path: ["target"], string_contains: filters.q } },
+    { evidenceJson: { path: ["rule"], string_contains: filters.q } },
+  ] });
+  if (anchor) clauses.push({ OR: [{ openedAt: { lt: anchor.openedAt } }, { openedAt: anchor.openedAt, id: { lt: anchor.id } }] });
   const incidents = await prisma.incident.findMany({
-    where: { ...(filters.severity ? { severity: filters.severity } : {}), ...(filters.status ? { status: filters.status } : {}) },
+    where: { ...(filters.severity ? { severity: filters.severity } : {}), ...(filters.status ? { status: filters.status } : {}), ...(filters.from || filters.to ? { openedAt: { ...(filters.from ? { gte: new Date(filters.from) } : {}), ...(filters.to ? { lte: new Date(filters.to) } : {}) } } : {}), ...(clauses.length ? { AND: clauses } : {}) },
     include: { monitor: { include: { chain: true } } },
-    orderBy: { openedAt: "desc" },
-    take: Math.min(filters.limit ?? 50, 100),
+    orderBy: [{ openedAt: "desc" }, { id: "desc" }],
+    take: filters.limit + 1,
   });
-  return incidents.map(serializeIncident);
+  const page = incidents.slice(0, filters.limit);
+  const last = page.at(-1);
+  return { incidents: page.map(serializeIncident), ...(incidents.length > filters.limit && last ? { nextCursor: Buffer.from(JSON.stringify({ id: last.id, at: last.openedAt.toISOString() })).toString("base64url") } : {}) };
+}
+
+export async function listIncidents(filters: Partial<IncidentQuery>) {
+  return (await listIncidentPage(filters)).incidents;
 }
 
 export async function getIncident(id: string) {

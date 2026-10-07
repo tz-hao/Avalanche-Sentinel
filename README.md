@@ -71,7 +71,7 @@ Monitor 默认检查间隔为 30 秒，创建契约允许 15–3600 秒。Worker
 - 校验与测试：Zod、Vitest、Testing Library、ESLint、TypeScript。
 - 部署：Web 和 Worker 分别构建；Web 使用 Vercel，Worker 使用 Railway。Docker Compose 用于显式区分 Web、迁移和 Worker 启动。
 
-核心数据包括 `chains`、`monitors`、`monitor_state`、`incidents`、`incident_events`、`notifications`，另有 ICM 消息持久化模型。数据库表结构和索引以 [Prisma schema](prisma/schema.prisma) 与已提交迁移为准。
+核心数据包括 `chains`、`monitors`、`monitor_state`、`incidents`、`incident_events`、`notifications`，另有 ICM 消息与 Worker 心跳持久化模型。数据库表结构和索引以 [Prisma schema](prisma/schema.prisma) 与已提交迁移为准。
 
 ### 目录
 
@@ -158,7 +158,7 @@ npm.cmd run worker
 
 开发模式 Worker 可以加载本地环境文件；`NODE_ENV=production` 时仅使用平台注入的 `process.env`，不依赖 `.env.local`、Windows、WSL 或 localhost Web。
 
-启动 Worker 会读取真实 RPC，并持久化状态和 Incident；即使链上只读，也不是没有外部访问或数据库写入。当前创建 Monitor 的模型默认 `enabled=true`：**不要假定新 Monitor 默认暂停**。如果需要先审阅配置，在 Worker 停止时创建并禁用，确认后再启动。
+启动 Worker 会读取真实 RPC，并持久化状态和 Incident；即使链上只读，也不是没有外部访问或数据库写入。创建 API 与 UI 现在默认保存为停用；API 仅在明确传入 `enabled=true` 时立即启用。编辑配置要求先停用并等待 lease 释放；保存后保留 cursor 和历史证据，检查状态重置为 UNKNOWN，启用后重新巡检。
 
 `SENTINEL_DISABLE_EXTERNAL_NOTIFICATIONS=1` 用于禁止 Worker 处理外部通知投递；同时保持 Demo 关闭、不配置 AI。停止当前开发 Worker 可使用 Ctrl+C，触发受控关闭。
 
@@ -192,7 +192,7 @@ API 基础路径为 `/api/v1`。登录入口接收管理员口令；Dashboard �
 | `GET` | `/overview` | 整体健康与近期事件 |
 | `GET` / `POST` | `/chains` | 读取 / 注册链配置；POST 会写数据库 |
 | `GET` / `POST` | `/monitors` | 读取 / 创建监控 |
-| `PATCH` | `/monitors/:id` | 更新启停或检查间隔 |
+| `PATCH` | `/monitors/:id` | 更新启停；停用且 lease 已释放时可编辑 target、配置和检查间隔 |
 | `GET` | `/incidents` | 按查询条件读取事件列表 |
 | `GET` | `/incidents/:id` | 读取事件详情与时间线 |
 | `POST` | `/incidents/:id/ack` | 确认知悉事件；写入应用状态 |

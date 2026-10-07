@@ -142,7 +142,7 @@ export default function IncidentDetailPage() {
         router.push("/login" as Route);
         return;
       }
-      setSummaryError(err instanceof SentinelApiError && err.code === "AI_NOT_CONFIGURED" ? "AI 摘要暂不可用：AI Provider 尚未配置。" : err instanceof SentinelApiError && err.code === "AI_SUMMARY_TIMEOUT" ? "AI 摘要生成超时，请稍后重试。" : "AI 摘要暂不可用：请查看下方原始 Evidence，稍后可重试。");
+      setSummaryError(err instanceof SentinelApiError && ["AI_SUMMARY_BALANCE_REQUIRED","AI_SUMMARY_RATE_LIMITED","AI_SUMMARY_AUTH_FAILED"].includes(err.code) ? err.message : err instanceof SentinelApiError && err.code === "AI_NOT_CONFIGURED" ? "AI 摘要暂不可用：AI Provider 尚未配置。" : err instanceof SentinelApiError && err.code === "AI_SUMMARY_TIMEOUT" ? "AI 摘要生成超时，请稍后重试。" : "AI 摘要暂不可用：请查看下方原始 Evidence，稍后可重试。");
     } finally {
       summaryInFlight.current = false;
       setGeneratingSummary(false);

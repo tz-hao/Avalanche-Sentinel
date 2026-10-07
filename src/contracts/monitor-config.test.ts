@@ -2,6 +2,12 @@ import { describe, expect, it } from "vitest";
 import { createMonitorSchema } from "@/contracts/monitor-config";
 
 describe("monitor input validation", () => {
+  it("rejects executable custom rules and non-integer event fields", () => {
+    const base = { type: "CUSTOM_EVENT", chainId: "chain_1", target: "0x" + "11".repeat(20) };
+    expect(createMonitorSchema.safeParse({ ...base, config: { eventAbi: "event Transfer(address indexed from, uint256 value)", valueField: "value", thresholdAtomic: "9007199254740993" } }).success).toBe(true);
+    expect(createMonitorSchema.safeParse({ ...base, config: { eventAbi: "event Transfer(address indexed from, uint256 value)", valueField: "from", thresholdAtomic: "1" } }).success).toBe(false);
+    expect(createMonitorSchema.safeParse({ ...base, config: { eventAbi: "alert('x')", valueField: "value", thresholdAtomic: "1" } }).success).toBe(false);
+  });
   it("rejects floating point treasury thresholds", () => {
     const result = createMonitorSchema.safeParse({
       type: "TREASURY",

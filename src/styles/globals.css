@@ -17,3 +17,7 @@
 .button-primary{background:#0b6fa7;border-color:#0b6fa7}
 .forensic-lifecycle{grid-column:1;padding-top:0}.forensic-lifecycle .lifecycle{margin-top:0}.case-file{grid-column:2;grid-row:1/span 2}
 @media(max-width:900px){.forensic-layout>.forensic-canvas:first-child{grid-row:1}.case-file{grid-column:1;grid-row:2}.forensic-lifecycle{grid-row:3}}
+/* Incident history controls share the existing form palette. */
+.history-query { display: flex; flex-wrap: wrap; gap: 12px; align-items: end; }
+.history-query label { display: flex; flex: 1 1 200px; min-width: 0; flex-direction: column; gap: 8px; }
+.history-query input { min-width: 0; width: 100%; max-width: 100%; padding: 10px; color: inherit; background: var(--panel, #101820); border: 1px solid #34404a; border-radius: 6px; }
